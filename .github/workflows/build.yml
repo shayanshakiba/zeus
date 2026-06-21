@@ -1,16 +1,17 @@
-name: Build Windows EXE
+name: Build and Release Windows EXE
 
-# این اسکریپت هر بار که روی شاخه main پوش کنی اجرا میشه
-# و همچنین قابلیت اجرای دستی هم داره
 on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  build:
-    # حتماً باید روی محیط ویندوز بیلد بشه تا خروجی exe بده
+  build-and-release:
     runs-on: windows-latest
+    
+    # این دسترسی برای اینه که اکشن بتونه تو گیت‌هابت ریلیز بسازه
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout code
@@ -31,8 +32,12 @@ jobs:
       run: |
         pyinstaller --onefile --clean deploy.py
         
-    - name: Upload EXE Artifact
-      uses: actions/upload-artifact@v4
+    - name: Create Release and Upload EXE
+      uses: softprops/action-gh-release@v2
       with:
-        name: Zeus-Deployer-EXE
-        path: dist/deploy.exe
+        # ساخت یک تگ و اسم داینامیک بر اساس شماره اجرای اکشن
+        tag_name: v1.0.${{ github.run_number }}
+        name: Zeus Panel Deployer v1.0.${{ github.run_number }}
+        files: dist/deploy.exe
+        draft: false
+        prerelease: false
