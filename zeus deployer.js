@@ -576,6 +576,10 @@ function toggleToken() {
                     statusContainer.style.display = 'none';
                     errorBox.style.display = 'block';
 
+                    btn.disabled = false;
+                    document.getElementById('apiToken').disabled = false;
+                    btn.innerText = 'ساخت پنل';
+
                     const errorMsg = e.message;
                     const rawError = errorMsg.includes('|') ? errorMsg.split('|')[1] : errorMsg;
                     
