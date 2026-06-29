@@ -373,11 +373,45 @@ const Router = {
               "UPDATE users SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE username = ?"
             ).bind(username).run();
             return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+          } else if (body.reset_action !== undefined) {
+            if (body.reset_action === 'volume') {
+              await env.DB.prepare("UPDATE users SET used_gb = 0 WHERE username = ?").bind(username).run();
+              GLOBAL_TRAFFIC_CACHE.set(username, 0);
+            } else if (body.reset_action === 'req') {
+              await env.DB.prepare("UPDATE users SET used_req = 0 WHERE username = ?").bind(username).run();
+              USER_REQ_CACHE.set(username, 0);
+            } else if (body.reset_action === 'time') {
+              await env.DB.prepare("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE username = ?").bind(username).run();
+            }
+            return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
           } else {
-            const { limit_gb, expiry_days, limit_req, ips, tls, port, fingerprint, max_connections } = body;
+            const { username: new_username, limit_gb, expiry_days, limit_req, ips, tls, port, fingerprint, max_connections } = body;
+            if (new_username && new_username !== username) {
+              const existing = await env.DB.prepare("SELECT id FROM users WHERE username = ?").bind(new_username).first();
+              if (existing) {
+                return new Response(JSON.stringify({ error: "این نام کاربری از قبل وجود دارد" }), { status: 400, headers: { "Content-Type": "application/json" } });
+              }
+              if (GLOBAL_TRAFFIC_CACHE.has(username)) {
+                GLOBAL_TRAFFIC_CACHE.set(new_username, GLOBAL_TRAFFIC_CACHE.get(username));
+                GLOBAL_TRAFFIC_CACHE.delete(username);
+              }
+              if (USER_REQ_CACHE.has(username)) {
+                USER_REQ_CACHE.set(new_username, USER_REQ_CACHE.get(username));
+                USER_REQ_CACHE.delete(username);
+              }
+              if (ACTIVE_CONNECTIONS_COUNT.has(username)) {
+                ACTIVE_CONNECTIONS_COUNT.set(new_username, ACTIVE_CONNECTIONS_COUNT.get(username));
+                ACTIVE_CONNECTIONS_COUNT.delete(username);
+              }
+              if (GLOBAL_LAST_ACTIVE_WRITE.has(username)) {
+                GLOBAL_LAST_ACTIVE_WRITE.set(new_username, GLOBAL_LAST_ACTIVE_WRITE.get(username));
+                GLOBAL_LAST_ACTIVE_WRITE.delete(username);
+              }
+            }
             await env.DB.prepare(
-              "UPDATE users SET limit_gb = ?, expiry_days = ?, limit_req = ?, ips = ?, tls = ?, port = ?, fingerprint = ?, max_connections = ? WHERE username = ?"
+              "UPDATE users SET username = ?, limit_gb = ?, expiry_days = ?, limit_req = ?, ips = ?, tls = ?, port = ?, fingerprint = ?, max_connections = ? WHERE username = ?"
             ).bind(
+              new_username || username,
               limit_gb ? parseFloat(limit_gb) : null, 
               expiry_days ? parseInt(expiry_days) : null, 
               limit_req ? parseInt(limit_req) : null,
@@ -2560,7 +2594,7 @@ const HTML_TEMPLATES = {
                 </div>
                 <div>
                     <label class="block text-xs font-medium mb-1.5 text-gray-700 dark:text-zinc-300">تعداد</label>
-                    <input type="number" id="ip-count-input" min="1" value="10" class="w-full px-3 py-2.5 bg-gray-50 dark:bg-amoled-input border border-gray-300 dark:border-amoled-border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-mono text-center">
+                    <input type="number" id="ip-count-input" min="1" value="10" dir="ltr" class="w-full px-3 py-2.5 bg-gray-50 dark:bg-amoled-input border border-gray-300 dark:border-amoled-border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-mono text-center">
                 </div>
             </div>
             <div class="pt-4 flex gap-3">
@@ -2960,6 +2994,7 @@ const HTML_TEMPLATES = {
 					        '<div class="flex flex-col justify-between h-20 text-[10px] text-gray-500 dark:text-gray-400 font-medium text-right flex-1 whitespace-nowrap">' +
 					            '<span class="text-gray-800 dark:text-zinc-200 leading-none">مصرف: ' + usedReq.toLocaleString() + '</span>' +
 					            '<span class="leading-none">کل: ' + user.limit_req.toLocaleString() + '</span>' +
+					            '<button onclick="resetUserData(\\'' + encodeURIComponent(user.username) + '\\', \\'req\\')" class="mt-1 inline-block w-full text-center px-1 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors cursor-pointer">ریست</button>' +
 					        '</div>' +
 					    '</div>';
 					} else {
@@ -2970,6 +3005,7 @@ const HTML_TEMPLATES = {
 					        '<div class="flex flex-col justify-between h-20 text-[10px] text-gray-500 dark:text-gray-400 font-medium text-right flex-1 whitespace-nowrap">' +
 					            '<span class="text-gray-800 dark:text-zinc-200 leading-none">مصرف: ' + usedReq.toLocaleString() + '</span>' +
 					            '<span class="leading-none">کل: نامحدود</span>' +
+					            '<button onclick="resetUserData(\\'' + encodeURIComponent(user.username) + '\\', \\'req\\')" class="mt-1 inline-block w-full text-center px-1 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors cursor-pointer">ریست</button>' +
 					        '</div>' +
 					    '</div>';
 					}
@@ -2986,6 +3022,7 @@ const HTML_TEMPLATES = {
 					        '<div class="flex flex-col justify-between h-20 text-[10px] text-gray-500 dark:text-gray-400 font-medium text-right flex-1 whitespace-nowrap">' +
 					            '<span class="text-gray-800 dark:text-zinc-200 leading-none">مصرف: ' + formattedUsed + '</span>' +
 					            '<span class="leading-none">کل: ' + formattedLimit + '</span>' +
+					            '<button onclick="resetUserData(\\'' + encodeURIComponent(user.username) + '\\', \\'volume\\')" class="mt-1 inline-block w-full text-center px-1 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors cursor-pointer">ریست</button>' +
 					        '</div>' +
 					    '</div>';
 					} else {
@@ -2996,6 +3033,7 @@ const HTML_TEMPLATES = {
 					        '<div class="flex flex-col justify-between h-20 text-[10px] text-gray-500 dark:text-gray-400 font-medium text-right flex-1 whitespace-nowrap">' +
 					            '<span class="text-gray-800 dark:text-zinc-200 leading-none">مصرف: ' + formattedUsed + '</span>' +
 					            '<span class="leading-none">کل: نامحدود</span>' +
+					            '<button onclick="resetUserData(\\'' + encodeURIComponent(user.username) + '\\', \\'volume\\')" class="mt-1 inline-block w-full text-center px-1 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors cursor-pointer">ریست</button>' +
 					        '</div>' +
 					    '</div>';
 					}
@@ -3010,6 +3048,7 @@ const HTML_TEMPLATES = {
 					        '<div class="flex flex-col justify-between h-20 text-[10px] text-gray-500 dark:text-gray-400 font-medium text-right flex-1 whitespace-nowrap">' +
 					            '<span class="text-gray-800 dark:text-zinc-200 leading-none">مانده: ' + daysRemaining + ' روز</span>' +
 					            '<span class="leading-none">کل: ' + user.expiry_days + ' روز</span>' +
+					            '<button onclick="resetUserData(\\'' + encodeURIComponent(user.username) + '\\', \\'time\\')" class="mt-1 inline-block w-full text-center px-1 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors cursor-pointer">ریست</button>' +
 					        '</div>' +
 					    '</div>';
 					} else {
@@ -3020,6 +3059,7 @@ const HTML_TEMPLATES = {
 					        '<div class="flex flex-col justify-between h-20 text-[10px] text-gray-500 dark:text-gray-400 font-medium text-right flex-1 whitespace-nowrap">' +
 					            '<span class="text-gray-800 dark:text-zinc-200 leading-none">مانده: نامحدود</span>' +
 					            '<span class="leading-none">کل: نامحدود</span>' +
+					            '<button onclick="resetUserData(\\'' + encodeURIComponent(user.username) + '\\', \\'time\\')" class="mt-1 inline-block w-full text-center px-1 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors cursor-pointer">ریست</button>' +
 					        '</div>' +
 					    '</div>';
 					}
@@ -3049,6 +3089,16 @@ const HTML_TEMPLATES = {
 					        '</div>' +
 					    '</div>';
 					}
+                    let isExpired = false;
+                    if (user.limit_gb && (user.used_gb || 0) >= user.limit_gb) isExpired = true;
+                    if (user.limit_req && (user.used_req || 0) >= user.limit_req) isExpired = true;
+                    if (user.expiry_days && user.created_at) {
+                        const created = new Date(user.created_at);
+                        const expiryDate = new Date(created.getTime() + (user.expiry_days * 24 * 60 * 60 * 1000));
+                        if (new Date(serverTime) > expiryDate) isExpired = true;
+                    }
+                    const isEffectivelyActive = user.is_active !== 0 && !isExpired;
+
                     const statusBtnColor = user.is_active === 0 ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30' : 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30';
                     const statusBtnTitle = user.is_active === 0 ? 'فعال کردن کاربر' : 'قطع کردن کاربر';
                     const statusBtnIcon = user.is_active === 0 
@@ -3060,7 +3110,7 @@ const HTML_TEMPLATES = {
                                 '<div class="flex flex-col items-center gap-1.5 w-[140px] mx-auto select-none">' +
                                     '<span class="font-bold text-gray-900 dark:text-zinc-100 text-sm truncate max-w-full">' + user.username + '</span>' +
                                     '<div class="flex gap-1 w-full justify-center text-center">' +
-                                        (user.is_active === 0 ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 rounded-md">قطع</span>' : '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-md">فعال</span>') +
+                                        (!isEffectivelyActive ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 rounded-md">غیرفعال</span>' : '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-md">فعال</span>') +
                                         (user.is_online === 1 ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500 text-white rounded-md animate-pulse" dir="rtl">● آنلاین (' + (user.online_count || 0) + (user.max_connections ? '/' + user.max_connections : '') + ')</span>' : '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-gray-200 text-gray-600 dark:bg-zinc-800 dark:text-zinc-400 rounded-md">آفلاین</span>') +
                                     '</div>' +
                                     '<div class="grid grid-cols-3 gap-1 w-full">' +
@@ -3121,7 +3171,33 @@ const HTML_TEMPLATES = {
                 }).join('');
             }
         }
+async function resetUserData(encodedUsername, actionType) {
+            const username = decodeURIComponent(encodedUsername);
+            let actionName = '';
+            
+            if (actionType === 'volume') actionName = 'حجم';
+            else if (actionType === 'req') actionName = 'ریکوئست';
+            else if (actionType === 'time') actionName = 'زمان';
 
+            if (confirm('آیا از ریست کردن ' + actionName + ' کاربر ' + username + ' مطمئن هستید؟')) {
+                try {
+                    const response = await fetch('/api/users/' + encodeURIComponent(username), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reset_action: actionType })
+                    });
+                    if (response.ok) {
+                        alert('عملیات با موفقیت انجام شد.');
+                        await loadUsers(true);
+                    } else {
+                        const errData = await response.json();
+                        alert('خطا: ' + (errData.error || 'عملیات ناموفق بود'));
+                    }
+                } catch (err) {
+                    alert('خطا در برقراری ارتباط با سرور');
+                }
+            }
+        }
         async function toggleUserStatus(encodedUsername) {
             const username = decodeURIComponent(encodedUsername);
             try {
@@ -3537,7 +3613,7 @@ function editUser(encodedUsername) {
 
     const nameInput = document.getElementById('input-name');
     nameInput.value = username;
-    nameInput.disabled = true;
+    nameInput.disabled = false;
 
     document.getElementById('input-limit').value = user.limit_gb || '';
     document.getElementById('input-expiry').value = user.expiry_days || '';
@@ -3746,7 +3822,7 @@ function editUser(encodedUsername) {
                 window.location.reload();
             }
         }
-const CURRENT_VERSION = '1.4.3';
+const CURRENT_VERSION = '1.4.4';
 const UPDATE_FIX = "constsCURRENT_VERSION='d.d.d'";
 
 		async function checkForUpdates(isManual = false) {
@@ -3928,7 +4004,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderPortCheckboxes();
             loadUsers();
             loadLocations();
-            setInterval(() => loadUsers(true), 10000);
+            setInterval(() => loadUsers(true), 2000);
             setTimeout(() => checkForUpdates(false), 2000);
         });
     </script>
