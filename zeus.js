@@ -2714,7 +2714,7 @@ const HTML_TEMPLATES = {
                 <div>
                     <label class="block text-xs font-medium mb-1.5 text-gray-700 dark:text-zinc-300">اوپراتور</label>
                     <select id="ip-operator-select" class="w-full px-3 py-2.5 bg-gray-50 dark:bg-amoled-input border border-gray-300 dark:border-amoled-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 dark:text-zinc-300 cursor-pointer">
-                        <option value="all">All</option>
+                        <option value="all">همه (توصیح شده)</option>
                     </select>
                 </div>
                 <div>
