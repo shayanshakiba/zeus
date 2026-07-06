@@ -23,7 +23,7 @@ export default {
 		trackRequest(env, ctx);
 		await DbService.ensureSchema(env.DB);
 		const url = new URL(request.url);
-		if (Router.isWebSocketUpgrade(request) && url.pathname === "/shakibaaaaaaaaaaaaa-vpn") {
+		if (Router.isWebSocketUpgrade(request) && url.pathname === "/shakibaaaaaaaaaaaaa-vp") {
 			return await Router.handleWebSocket(request, env, ctx);
 		}
 		if (Router.isSubscriptionPath(url.pathname)) {
@@ -4194,7 +4194,7 @@ function getVlessLink(username) {
                     const isTlsPort = tlsPorts.includes(portStr);
                     const tlsVal = isTlsPort ? 'tls' : 'none';
                     const remark = user.username + ' | \u200E' + ip + ' | \u200E' + portStr;
-                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2Fshakibaaaaaaaaaaaaa-vpn&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + userFrag + '#' + encodeURIComponent(remark));
+                    links.push('vle' + 'ss://' + (user.uuid || '') + '@' + ip + ':' + portStr + '?path=%2Fshakibaaaaaaaaaaaaa-vp&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + userFrag + '#' + encodeURIComponent(remark));
                 });
             });
             return links.join('\\n');
@@ -5154,7 +5154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     var isTlsPort = ['443', '2053', '2083', '2087', '2096', '8443'].includes(portStr);
                     var tlsVal = isTlsPort ? 'tls' : 'none';
                     var remark = ips.length > 1 ? (u.username + '-' + (ipIndex + 1) + '-' + portStr) : (u.username + '-' + portStr);
-                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2Fshakibaaaaaaaaaaaaa-vpn&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + userFrag + '#' + encodeURIComponent(remark));
+                    links.push('vle' + 'ss://' + (u.uuid || '') + '@' + ip + ':' + portStr + '?path=%2Fshakibaaaaaaaaaaaaa-vp&security=' + tlsVal + '&encryption=none&insecure=0&host=' + host + '&fp=' + fp + '&type=ws&allowInsecure=0&sni=' + host + userFrag + '#' + encodeURIComponent(remark));
                 });
             });
             return links.join('\\n');
